@@ -64,7 +64,7 @@ jobs:
         run: exit 1
 
 security-scan:
-    name: SAST - Checkov & tfsec
+    name: SAST - Checkov & tfsec 2
     runs-on: ubuntu-latest
 
     steps:

@@ -63,7 +63,7 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-  security-scan:
+security-scan:
     name: SAST - Checkov & tfsec
     runs-on: ubuntu-latest
 
@@ -71,7 +71,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-# --- CHECKOV ---
+      # --- CHECKOV ---
       - name: Run Checkov
         id: checkov
         uses: bridgecrewio/checkov-action@master
@@ -90,13 +90,20 @@ jobs:
           sarif_file: checkov-results.sarif
           category: checkov
 
-      # --- TFSEC ---
-      - name: Run tfsec (SARIF)
-        if: always()
-        uses: aquasecurity/tfsec-sarif-action@v0.1.4
-        with:
-          working_directory: infra
-          sarif_file: tfsec-results.sarif
+      # --- TFSEC (instalado directo, mismo binario que en local) ---
+      - name: Install tfsec
+        run: |
+          curl -sSL -o tfsec https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64
+          chmod +x tfsec
+          sudo mv tfsec /usr/local/bin/tfsec
+
+      - name: Run tfsec
+        id: tfsec
+        run: |
+          tfsec infra --format sarif --out tfsec-results.sarif --soft-fail
+          ISSUES=$(jq '.runs[0].results | length' tfsec-results.sarif)
+          echo "Se encontraron $ISSUES hallazgos con tfsec"
+          echo "issues=$ISSUES" >> "$GITHUB_OUTPUT"
 
       - name: Upload tfsec SARIF
         if: always()
@@ -105,17 +112,9 @@ jobs:
           sarif_file: tfsec-results.sarif
           category: tfsec
 
-      # --- COMENTARIOS LÍNEA POR LÍNEA EN EL PR ---
-      - name: tfsec PR Commenter
-        if: github.event_name == 'pull_request'
-        uses: aquasecurity/tfsec-pr-commenter-action@v1.3.1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          working_directory: infra
-      
       # --- BLOQUEO: si Checkov o tfsec detectaron fallas, el job falla ---
       - name: Fail job if security issues were found
-        if: steps.checkov.outcome == 'failure'
+        if: steps.checkov.outcome == 'failure' || steps.tfsec.outputs.issues != '0'
         run: |
-          echo "❌ Checkov detectó configuraciones inseguras. Revisa los comentarios en 'Files changed' y la pestaña Security."
+          echo "❌ Se detectaron configuraciones inseguras (Checkov y/o tfsec). Revisa 'Files changed' y la pestaña Security."
           exit 1

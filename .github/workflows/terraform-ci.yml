@@ -9,6 +9,16 @@ on:
     branches: [main]
     paths:
       - 'infra/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-ci.yml'
 
 permissions:
   contents: read

@@ -13,6 +13,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  security-events: write
 
 jobs:
   terraform-check:
@@ -59,3 +60,59 @@ jobs:
       - name: Plan status
         if: steps.plan.outcome == 'failure'
         run: exit 1
+
+  security-scan:
+    name: SAST - Checkov & tfsec
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- CHECKOV ---
+      - name: Run Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra
+          framework: terraform
+          output_format: cli,sarif
+          output_file_path: console,checkov-results.sarif
+          soft_fail: true
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+      # --- TFSEC ---
+      - name: Run tfsec (SARIF)
+        if: always()
+        uses: aquasecurity/tfsec-sarif-action@v0.1.4
+        with:
+          working_directory: infra
+          sarif_file: tfsec-results.sarif
+
+      - name: Upload tfsec SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec-results.sarif
+          category: tfsec
+
+      # --- COMENTARIOS LÍNEA POR LÍNEA EN EL PR ---
+      - name: tfsec PR Commenter
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/tfsec-pr-commenter-action@v1.3.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          working_directory: infra
+
+      # --- BLOQUEO: si Checkov detectó fallas, el job falla ---
+      - name: Fail if Checkov found issues
+        if: steps.checkov.outcome == 'failure'
+        run: |
+          echo "❌ Checkov detectó configuraciones inseguras. Revisa los comentarios del PR y la pestaña Security."
+          exit 1

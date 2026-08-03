@@ -63,8 +63,8 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-security-scan:
-    name: SAST - Checkov & tfsec 2
+  security-scan:
+    name: SAST - Checkov & tfsec
     runs-on: ubuntu-latest
 
     steps:

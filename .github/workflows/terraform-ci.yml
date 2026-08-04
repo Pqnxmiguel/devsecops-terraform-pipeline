@@ -115,7 +115,7 @@ jobs:
       # --- TRIVY (refuerzo, mejor integración con Code Scanning) ---
       - name: Run Trivy (Terraform config scan)
         id: trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
           scan-ref: infra

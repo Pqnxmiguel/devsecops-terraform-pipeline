@@ -18,6 +18,9 @@ permissions:
   security-events: write
 
 jobs:
+  # ============================================================
+  # JOB 1: Terraform format, validate & plan
+  # ============================================================
   terraform-check:
     name: Terraform Format, Validate & Plan
     runs-on: ubuntu-latest
@@ -63,15 +66,17 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-  security-scan:
-    name: SAST - Checkov, tfsec & Trivy
+  # ============================================================
+  # JOB 2: SAST - Checkov (independiente)
+  # ============================================================
+  sast-checkov:
+    name: SAST - Checkov
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- CHECKOV ---
       - name: Run Checkov
         id: checkov
         uses: bridgecrewio/checkov-action@master
@@ -80,8 +85,7 @@ jobs:
           framework: terraform
           output_format: cli,sarif
           output_file_path: console,checkov-results.sarif
-          soft_fail: false
-        continue-on-error: true
+          soft_fail: true
 
       - name: Upload Checkov SARIF
         if: always()
@@ -90,7 +94,30 @@ jobs:
           sarif_file: checkov-results.sarif
           category: checkov
 
-      # --- TFSEC ---
+      - name: Count Checkov findings
+        id: count
+        run: |
+          FAILED=$(jq '[.runs[].results[]] | length' checkov-results.sarif)
+          echo "Checkov encontró $FAILED hallazgos"
+          echo "issues=$FAILED" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if Checkov found issues
+        if: steps.count.outputs.issues != '0'
+        run: |
+          echo "❌ Checkov detectó ${{ steps.count.outputs.issues }} configuraciones inseguras."
+          exit 1
+
+  # ============================================================
+  # JOB 3: SAST - tfsec (independiente)
+  # ============================================================
+  sast-tfsec:
+    name: SAST - tfsec
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Install tfsec
         run: |
           curl -sSL -o tfsec https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64
@@ -102,7 +129,7 @@ jobs:
         run: |
           tfsec infra --format sarif --out tfsec-results.sarif --soft-fail
           ISSUES=$(jq '.runs[0].results | length' tfsec-results.sarif)
-          echo "Se encontraron $ISSUES hallazgos con tfsec"
+          echo "tfsec encontró $ISSUES hallazgos"
           echo "issues=$ISSUES" >> "$GITHUB_OUTPUT"
 
       - name: Upload tfsec SARIF
@@ -112,9 +139,24 @@ jobs:
           sarif_file: tfsec-results.sarif
           category: tfsec
 
-      # --- TRIVY (refuerzo, mejor integración con Code Scanning) ---
+      - name: Fail if tfsec found issues
+        if: steps.tfsec.outputs.issues != '0'
+        run: |
+          echo "❌ tfsec detectó ${{ steps.tfsec.outputs.issues }} configuraciones inseguras."
+          exit 1
+
+  # ============================================================
+  # JOB 4: SAST - Trivy (independiente)
+  # ============================================================
+  sast-trivy:
+    name: SAST - Trivy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Run Trivy (Terraform config scan)
-        id: trivy
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
@@ -130,22 +172,15 @@ jobs:
           sarif_file: trivy-results.sarif
           category: trivy
 
-      # --- BLOQUEO: si Checkov, tfsec o Trivy detectaron fallas, el job falla ---
       - name: Count Trivy findings
-        id: trivy_count
-        if: always()
+        id: count
         run: |
-          if [ -f trivy-results.sarif ]; then
-            TRIVY_ISSUES=$(jq '[.runs[].results[]] | length' trivy-results.sarif)
-          else
-            TRIVY_ISSUES=0
-          fi
-          echo "Trivy encontró $TRIVY_ISSUES hallazgos"
-          echo "issues=$TRIVY_ISSUES" >> "$GITHUB_OUTPUT"
+          ISSUES=$(jq '[.runs[].results[]] | length' trivy-results.sarif)
+          echo "Trivy encontró $ISSUES hallazgos"
+          echo "issues=$ISSUES" >> "$GITHUB_OUTPUT"
 
-      - name: Fail job if security issues were found
-        if: steps.checkov.outcome == 'failure' || steps.tfsec.outputs.issues != '0' || steps.trivy_count.outputs.issues != '0'
+      - name: Fail if Trivy found issues
+        if: steps.count.outputs.issues != '0'
         run: |
-          echo "❌ Se detectaron configuraciones inseguras (Checkov, tfsec y/o Trivy)."
-          echo "   Revisa los comentarios en 'Files changed' y la pestaña Security del repo."
+          echo "❌ Trivy detectó ${{ steps.count.outputs.issues }} configuraciones inseguras."
           exit 1

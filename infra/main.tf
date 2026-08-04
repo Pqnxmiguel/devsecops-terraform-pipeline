@@ -23,7 +23,7 @@ resource "aws_s3_bucket" "secure_bucket" {
 resource "aws_s3_bucket_versioning" "secure_bucket" {
   bucket = aws_s3_bucket.secure_bucket.id
   versioning_configuration {
-    status = "Enabled"
+    status = "Suspended"
   }
 }
 
@@ -42,10 +42,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secure_bucket" {
 resource "aws_s3_bucket_public_access_block" "secure_bucket" {
   bucket = aws_s3_bucket.secure_bucket.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_logging" "secure_bucket" {

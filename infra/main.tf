@@ -25,7 +25,6 @@ resource "aws_s3_bucket_versioning" "secure_bucket" {
   versioning_configuration {
     status = "Enabled"
   }
-  
 }
 
 #tfsec:ignore:aws-s3-encryption-customer-key El laboratorio no usa CMK.

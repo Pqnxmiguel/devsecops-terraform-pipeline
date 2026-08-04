@@ -64,7 +64,7 @@ jobs:
         run: exit 1
 
   security-scan:
-    name: SAST - Checkov & tfsec
+    name: SAST - Checkov, tfsec & Trivy
     runs-on: ubuntu-latest
 
     steps:
@@ -90,7 +90,7 @@ jobs:
           sarif_file: checkov-results.sarif
           category: checkov
 
-      # --- TFSEC (instalado directo, mismo binario que en local) ---
+      # --- TFSEC ---
       - name: Install tfsec
         run: |
           curl -sSL -o tfsec https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64
@@ -112,9 +112,40 @@ jobs:
           sarif_file: tfsec-results.sarif
           category: tfsec
 
-      # --- BLOQUEO: si Checkov o tfsec detectaron fallas, el job falla ---
-      - name: Fail job if security issues were found
-        if: steps.checkov.outcome == 'failure' || steps.tfsec.outputs.issues != '0'
+      # --- TRIVY (refuerzo, mejor integración con Code Scanning) ---
+      - name: Run Trivy (Terraform config scan)
+        id: trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: infra
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0'
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      # --- BLOQUEO: si Checkov, tfsec o Trivy detectaron fallas, el job falla ---
+      - name: Count Trivy findings
+        id: trivy_count
+        if: always()
         run: |
-          echo "❌ Se detectaron configuraciones inseguras (Checkov y/o tfsec). Revisa 'Files changed' y la pestaña Security."
+          if [ -f trivy-results.sarif ]; then
+            TRIVY_ISSUES=$(jq '[.runs[].results[]] | length' trivy-results.sarif)
+          else
+            TRIVY_ISSUES=0
+          fi
+          echo "Trivy encontró $TRIVY_ISSUES hallazgos"
+          echo "issues=$TRIVY_ISSUES" >> "$GITHUB_OUTPUT"
+
+      - name: Fail job if security issues were found
+        if: steps.checkov.outcome == 'failure' || steps.tfsec.outputs.issues != '0' || steps.trivy_count.outputs.issues != '0'
+        run: |
+          echo "❌ Se detectaron configuraciones inseguras (Checkov, tfsec y/o Trivy)."
+          echo "   Revisa los comentarios en 'Files changed' y la pestaña Security del repo."
           exit 1

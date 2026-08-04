@@ -5,14 +5,17 @@ on:
     branches: [main]
     paths:
       - 'infra/**'
+      - '.github/workflows/terraform-ci.yml'
   push:
     branches: [main]
     paths:
       - 'infra/**'
+      - '.github/workflows/terraform-ci.yml'
 
 permissions:
   contents: read
   pull-requests: write
+  security-events: write
 
 jobs:
   terraform-check:
@@ -59,3 +62,59 @@ jobs:
       - name: Plan status
         if: steps.plan.outcome == 'failure'
         run: exit 1
+
+  security-scan:
+    name: SAST - Checkov & tfsec
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- CHECKOV ---
+      - name: Run Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra
+          framework: terraform
+          output_format: cli,sarif
+          output_file_path: console,checkov-results.sarif
+          soft_fail: false
+        continue-on-error: true
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+      # --- TFSEC (instalado directo, mismo binario que en local) ---
+      - name: Install tfsec
+        run: |
+          curl -sSL -o tfsec https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64
+          chmod +x tfsec
+          sudo mv tfsec /usr/local/bin/tfsec
+
+      - name: Run tfsec
+        id: tfsec
+        run: |
+          tfsec infra --format sarif --out tfsec-results.sarif --soft-fail
+          ISSUES=$(jq '.runs[0].results | length' tfsec-results.sarif)
+          echo "Se encontraron $ISSUES hallazgos con tfsec"
+          echo "issues=$ISSUES" >> "$GITHUB_OUTPUT"
+
+      - name: Upload tfsec SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec-results.sarif
+          category: tfsec
+
+      # --- BLOQUEO: si Checkov o tfsec detectaron fallas, el job falla ---
+      - name: Fail job if security issues were found
+        if: steps.checkov.outcome == 'failure' || steps.tfsec.outputs.issues != '0'
+        run: |
+          echo "❌ Se detectaron configuraciones inseguras (Checkov y/o tfsec). Revisa 'Files changed' y la pestaña Security."
+          exit 1

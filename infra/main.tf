@@ -75,3 +75,13 @@ resource "aws_iam_policy" "insecure_policy" {
     ]
   })
 }
+
+# --- Vulnerabilidad 5: puerto de base de datos abierto a todo el mundo ---
+resource "aws_security_group_rule" "insecure_db_rule" {
+  type              = "ingress"
+  from_port         = 3306
+  to_port           = 3306
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.insecure_sg.id
+}

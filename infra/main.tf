@@ -85,3 +85,8 @@ resource "aws_security_group_rule" "insecure_db_rule" {
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.insecure_sg.id
 }
+
+# --- Vulnerabilidad 6: bucket sin bloqueo de acceso público (prueba final) ---
+resource "aws_s3_bucket" "another_insecure_bucket" {
+  bucket = "devsecops-demo-test-final-${random_id.suffix.hex}"
+}

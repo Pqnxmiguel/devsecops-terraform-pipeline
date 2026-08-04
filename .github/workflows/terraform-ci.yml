@@ -135,6 +135,14 @@ jobs:
           echo "tfsec encontró $ISSUES hallazgos"
           echo "issues=$ISSUES" >> "$GITHUB_OUTPUT"
 
+      # tfsec reporta rutas relativas a "infra" (ej. "main.tf"); GitHub necesita
+      # rutas relativas a la raiz del repo (ej. "infra/main.tf") para poder
+      # anotar los hallazgos sobre el diff del PR.
+      - name: Normalizar rutas del SARIF
+        run: |
+          jq '(.runs[].results[]?.locations[]?.physicalLocation.artifactLocation.uri) |= "infra/" + .' tfsec-results.sarif > tfsec-results.sarif.tmp
+          mv tfsec-results.sarif.tmp tfsec-results.sarif
+
       - name: Upload tfsec SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -167,6 +175,14 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           exit-code: '0'
+
+      # Igual que en tfsec: Trivy reporta rutas relativas a "infra" (ej. "main.tf");
+      # las normalizamos a rutas relativas a la raiz del repo para que GitHub
+      # pueda anotar los hallazgos sobre el diff del PR.
+      - name: Normalizar rutas del SARIF
+        run: |
+          jq '(.runs[].results[]?.locations[]?.physicalLocation.artifactLocation.uri) |= "infra/" + .' trivy-results.sarif > trivy-results.sarif.tmp
+          mv trivy-results.sarif.tmp trivy-results.sarif
 
       - name: Upload Trivy SARIF
         if: always()

@@ -13,10 +13,10 @@ resource "random_id" "suffix" {
 }
 
 # --- Bucket S3 con configuración segura ---
-# checkov:skip=CKV2_AWS_62: No se requieren event notifications en este laboratorio.
-# checkov:skip=CKV2_AWS_61: Lifecycle no aplica; el bucket es efímero de demo.
-# checkov:skip=CKV_AWS_144: Replicación cross-region no aplica al laboratorio.
-# checkov:skip=CKV_AWS_145: Se usa AES256 gestionado por AWS, no KMS custom.
+#checkov:skip=CKV2_AWS_62: No se requieren event notifications en este laboratorio.
+#checkov:skip=CKV2_AWS_61: Lifecycle no aplica; el bucket es efímero de demo.
+#checkov:skip=CKV_AWS_144: Replicación cross-region no aplica al laboratorio.
+#checkov:skip=CKV_AWS_145: Se usa AES256 gestionado por AWS, no KMS custom.
 #tfsec:ignore:aws-s3-encryption-customer-key El laboratorio no usa CMK.
 #trivy:ignore:AVD-AWS-0132 El laboratorio no usa CMK.
 resource "aws_s3_bucket" "secure_bucket" {

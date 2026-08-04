@@ -16,6 +16,8 @@ resource "random_id" "suffix" {
 # NOTA: CKV2_AWS_62, CKV2_AWS_61, CKV_AWS_144 y CKV_AWS_145 son "graph checks"
 # de Checkov: no soportan supresión inline (#checkov:skip). Se silencian vía
 # `skip_check` en el job sast-checkov del workflow (.github/workflows/terraform-ci.yml).
+# VULN test: versioning suspendido en aws_s3_bucket_versioning (abajo) dispara
+# CKV_AWS_21 / CKV2_AWS_6, que Checkov reporta sobre este bloque.
 resource "aws_s3_bucket" "secure_bucket" {
   bucket = "devsecops-demo-secure-bucket-${random_id.suffix.hex}"
 }
@@ -39,6 +41,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secure_bucket" {
   }
 }
 
+# VULN test: los 4 flags en false dejan el bucket potencialmente publico
+# (CKV_AWS_53/54/55/56, aws-s3-block-*, AWS-0086/0087/0093).
 resource "aws_s3_bucket_public_access_block" "secure_bucket" {
   bucket = aws_s3_bucket.secure_bucket.id
 

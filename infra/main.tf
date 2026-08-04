@@ -13,12 +13,9 @@ resource "random_id" "suffix" {
 }
 
 # --- Bucket S3 con configuración segura ---
-#checkov:skip=CKV2_AWS_62: No se requieren event notifications en este laboratorio.
-#checkov:skip=CKV2_AWS_61: Lifecycle no aplica; el bucket es efímero de demo.
-#checkov:skip=CKV_AWS_144: Replicación cross-region no aplica al laboratorio.
-#checkov:skip=CKV_AWS_145: Se usa AES256 gestionado por AWS, no KMS custom.
-#tfsec:ignore:aws-s3-encryption-customer-key El laboratorio no usa CMK.
-#trivy:ignore:AVD-AWS-0132 El laboratorio no usa CMK.
+# NOTA: CKV2_AWS_62, CKV2_AWS_61, CKV_AWS_144 y CKV_AWS_145 son "graph checks"
+# de Checkov: no soportan supresión inline (#checkov:skip). Se silencian vía
+# `skip_check` en el job sast-checkov del workflow (.github/workflows/terraform-ci.yml).
 resource "aws_s3_bucket" "secure_bucket" {
   bucket = "devsecops-demo-secure-bucket-${random_id.suffix.hex}"
 }
@@ -30,6 +27,8 @@ resource "aws_s3_bucket_versioning" "secure_bucket" {
   }
 }
 
+#tfsec:ignore:aws-s3-encryption-customer-key El laboratorio no usa CMK.
+#trivy:ignore:AVD-AWS-0132 El laboratorio no usa CMK.
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure_bucket" {
   bucket = aws_s3_bucket.secure_bucket.id
 

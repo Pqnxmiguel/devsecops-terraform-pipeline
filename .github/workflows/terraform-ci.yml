@@ -86,6 +86,9 @@ jobs:
           output_format: cli,sarif
           output_file_path: console,checkov-results.sarif
           soft_fail: true
+          # CKV2_AWS_62/61 y CKV_AWS_144/145 son "graph checks": Checkov no
+          # soporta suprimirlos con comentarios inline (#checkov:skip), ver infra/main.tf.
+          skip_check: CKV2_AWS_62,CKV2_AWS_61,CKV_AWS_144,CKV_AWS_145
 
       - name: Upload Checkov SARIF
         if: always()

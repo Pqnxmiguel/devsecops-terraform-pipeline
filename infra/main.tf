@@ -41,15 +41,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secure_bucket" {
   }
 }
 
-# VULN test: los 4 flags en false dejan el bucket potencialmente publico
-# (CKV_AWS_53/54/55/56, aws-s3-block-*, AWS-0086/0087/0093).
+# VULN test: block_public_acls en false deja el bucket potencialmente publico
+# (CKV_AWS_53, aws-s3-block-public-acls, AWS-0086). Se deja un solo flag en
+# false (no los 4) para que Checkov reporte una unica regla sobre este bloque:
+# si varias reglas de Checkov comparten la misma region, GitHub les genera el
+# mismo fingerprint y no las cuenta como alertas nuevas del PR.
 resource "aws_s3_bucket_public_access_block" "secure_bucket" {
   bucket = aws_s3_bucket.secure_bucket.id
 
   block_public_acls       = false
-  block_public_policy     = false
-  ignore_public_acls      = false
-  restrict_public_buckets = false
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_logging" "secure_bucket" {

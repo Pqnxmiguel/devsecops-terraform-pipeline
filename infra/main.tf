@@ -6,6 +6,10 @@
 # Los "skip" están documentados y aplican solo a reglas de
 # buenas prácticas opcionales que no aplican a este laboratorio
 # (replicación cross-region, KMS custom, notificaciones, etc).
+#
+# Demo: esta rama (main) se mantiene limpia (0 hallazgos) a proposito,
+# como contraste con test/vulnerabilidades-s3-final (vulnerabilidades
+# introducidas a proposito para validar checkov/tfsec/trivy).
 # ============================================================
 
 resource "random_id" "suffix" {

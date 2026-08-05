@@ -46,7 +46,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secure_bucket" {
 # false (no los 4) para que Checkov reporte una unica regla sobre este bloque:
 # si varias reglas de Checkov comparten la misma region, GitHub les genera el
 # mismo fingerprint y no las cuenta como alertas nuevas del PR.
-resource "aws_s3_bucket_public_access_block" "secure_bucket" {
+resource "aws_s3_bucket_public_access_block" "secure_bucket" { # vuln-test: linea tocada a proposito
   bucket = aws_s3_bucket.secure_bucket.id
 
   block_public_acls       = false

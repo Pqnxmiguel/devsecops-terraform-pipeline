@@ -97,6 +97,14 @@ jobs:
           sarif_file: checkov-results.sarif
           category: checkov
 
+      - name: Guardar SARIF como artifact (para el resumen de Discord)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-sarif
+          path: checkov-results.sarif
+          retention-days: 5
+
       - name: Count Checkov findings
         id: count
         run: |
@@ -150,6 +158,14 @@ jobs:
           sarif_file: tfsec-results.sarif
           category: tfsec
 
+      - name: Guardar SARIF como artifact (para el resumen de Discord)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfsec-sarif
+          path: tfsec-results.sarif
+          retention-days: 5
+
       - name: Fail if tfsec found issues
         if: steps.tfsec.outputs.issues != '0'
         run: |
@@ -191,6 +207,14 @@ jobs:
           sarif_file: trivy-results.sarif
           category: trivy
 
+      - name: Guardar SARIF como artifact (para el resumen de Discord)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
+          retention-days: 5
+
       - name: Count Trivy findings
         id: count
         run: |
@@ -214,6 +238,27 @@ jobs:
     if: always()
 
     steps:
+      - name: Descargar SARIF de Checkov
+        if: always()
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: checkov-sarif
+
+      - name: Descargar SARIF de tfsec
+        if: always()
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: tfsec-sarif
+
+      - name: Descargar SARIF de Trivy
+        if: always()
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: trivy-sarif
+
       - name: Enviar notificacion
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.BOTDEVSEC }}
@@ -244,15 +289,47 @@ jobs:
             DESCRIPTION="${DESCRIPTION}"$'\n'"**PR:** ${PR_URL}"
           fi
 
+          # Arma una lista "- **regla** (nivel): descripcion" a partir de un SARIF.
+          # El SARIF no trae severidad CVSS real de Checkov/tfsec, asi que se usa
+          # el campo "level" (error/warning/note) como aproximacion a Alto/Medio/Bajo.
+          build_findings() {
+            local file="$1"
+            if [ ! -f "$file" ]; then
+              echo "(no se pudo leer el resultado)"
+              return
+            fi
+            local count
+            count=$(jq '[.runs[].results[]?] | length' "$file")
+            if [ "$count" = "0" ]; then
+              echo "Sin hallazgos ✅"
+              return
+            fi
+            jq -r '
+              [.runs[].results[] |
+                (if .level == "error" then "🔴 Alto"
+                 elif .level == "warning" then "🟡 Medio"
+                 else "🟢 Bajo" end) as $sev |
+                "- **\(.ruleId)** (\($sev)): \(.message.text // "sin descripcion")"
+              ] | join("\n")
+            ' "$file"
+          }
+
+          CHECKOV_FINDINGS=$(build_findings checkov-results.sarif | cut -c1-1000)
+          TFSEC_FINDINGS=$(build_findings tfsec-results.sarif | cut -c1-1000)
+          TRIVY_FINDINGS=$(build_findings trivy-results.sarif | cut -c1-1000)
+
           PAYLOAD=$(jq -n \
             --arg username "DEVSEC" \
             --arg title "$TITLE" \
             --arg description "$DESCRIPTION" \
             --argjson color "$COLOR" \
             --arg plan "$RESULT_PLAN" \
-            --arg checkov "$RESULT_CHECKOV" \
-            --arg tfsec "$RESULT_TFSEC" \
-            --arg trivy "$RESULT_TRIVY" \
+            --arg checkov_result "$RESULT_CHECKOV" \
+            --arg checkov_findings "$CHECKOV_FINDINGS" \
+            --arg tfsec_result "$RESULT_TFSEC" \
+            --arg tfsec_findings "$TFSEC_FINDINGS" \
+            --arg trivy_result "$RESULT_TRIVY" \
+            --arg trivy_findings "$TRIVY_FINDINGS" \
             --arg url "$RUN_URL" \
             '{
               username: $username,
@@ -262,10 +339,10 @@ jobs:
                 color: $color,
                 url: $url,
                 fields: [
-                  {name: "Terraform Plan", value: $plan, inline: true},
-                  {name: "Checkov", value: $checkov, inline: true},
-                  {name: "tfsec", value: $tfsec, inline: true},
-                  {name: "Trivy", value: $trivy, inline: true}
+                  {name: "Terraform Plan", value: $plan, inline: false},
+                  {name: "Checkov (\($checkov_result))", value: $checkov_findings, inline: false},
+                  {name: "tfsec (\($tfsec_result))", value: $tfsec_findings, inline: false},
+                  {name: "Trivy (\($trivy_result))", value: $trivy_findings, inline: false}
                 ]
               }]
             }')
